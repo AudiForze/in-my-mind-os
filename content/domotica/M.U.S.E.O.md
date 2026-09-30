@@ -1,0 +1,861 @@
+![[domotica1.jpg]]
+
+Este nace a partir de diseñar un diseño de un museo que implemente la tecnología para solucionar problemas de seguridad, eficientizar procesos a través de sistemas y programas y priorizar la comodidad de los visitantes y, sobre todo de los trabajadores.
+
+Para esto desarrollamos una `maqueta de un museo` que se ayuda de ciertos sensores conectados a una protoboard y a un Arduino que funciona como el cerebro de este proyecto, donde se guarda el código que ayuda a que todos los sensores puedan interconectarse. Este `proyecto` cuenta con una `aplicación móvil` que permite a los usuarios poder interactúa con el proyecto desde una aplicación. El mismo integra las siguientes funciones partiendo desde el apartado principal.
+
+---
+
+### Dashboard
+
+En este Panel De Control tenemos las principales herramientas de monitorio que necesitamos como puede ser el estado de la alarma, la cantidad de personas en tiempo real que han entrado al museo a los largo del día y la cantidad de luces que tenemos encendidas, así como un botón para abrir el servo motor responsable de la entrada al museo de forma totalmente remota.
+
+!image.png
+
+---
+
+### Sistema De Monitoreo Avanzado.
+
+El sistema de monitoreo avanzado nos permite controlar todo el sistema de alarma de forma `totalmente remota` y de forma segmentada, de forma que, si queremos activar/desactivar la alarma de la sala de conferencias, pero sin desactivar la `seguridad` del museo completo, pues podemos hacerlo con un solo botón. Aun así, se pueden encender o apagar el sistema de forma completa con un solo botón en caso de hacerlo.
+
+Si la alarma esta activa eso activa los LEDS de color rojo y activa todos los `sensores de movimientos` y proximidad que tiene el sistema, de forma que ante cualquier movimiento se manda una señal al buzzer quien se encarga de sonar en una secuencia de `4x1`.
+
+!image.png
+
+---
+
+### Sistema De Logs
+
+En este proyecto tenemos un sistema de logs que se divide en dos partes principales, `los logs de la alarma y logs generales`. En los logs de la alarma se guarda exclusivamente los eventos que han sido generado desde la alarma, como puedes ser cualquier movimiento que se produzca tanto si la alama esta activa o no. Lo que nos `permite poder visualizar` los eventos o movimientos que han sucedido segmentado por el lugar donde sea detectado, el estado de la alarma y la fecha/hora.
+
+Luego tenemos los logs generales donde se guardan todos los eventos externos a la alarma, como pueden ser cuando se encienden/apagan las luces, nombrando el lugar dentro del museo donde esta presente el evento, la fecha/hora y el id para poder identificarla poder filtrarlas después.
+
+!image.png
+
+---
+
+---
+
+## Como comunicarse con un arduino desde python?
+
+Una de las principales formas de hacer este proceso es a traves del puerto serial que poseen los arduinos, es como si nosotros abrirmos nuestra ventana del `serial monitor` y enviamos comandos pre-configurados en el codigo de arduino, la diferencia es que esto lo haremos desde python utilizando la biblioteca de SERIAL.
+
+```powershell
+pip instalar pyserial
+```
+
+### Encender un led desde python
+
+Para esto vamos a crear un codigo en python que nos permita utilizar `0` y `1` para encender o apagar un `led`. Para esto desde arduino vamos a subir el siguiente codigo que lo que hace es que al recibir 0 o 1 desde el puerto serial, enciende un led.
+
+```csharp
+// Código para Arduino
+const int ledPin = 13;
+char command;
+
+void setup() {
+  pinMode(ledPin, OUTPUT);
+  Serial.begin(9600);  // Inicia la comunicación serial a 9600 baudios
+}
+
+void loop() {
+  if (Serial.available()) {
+    command = Serial.read();  // Lee el carácter recibido
+
+    if (command == '1') {
+      digitalWrite(ledPin, HIGH);  // Enciende el LED
+    } else if (command == '0') {
+      digitalWrite(ledPin, LOW);   // Apaga el LED
+    }
+  }
+}
+
+// by: physco
+```
+
+Y ahora desde python vamos a implementar un codigo que se encargue de mandar esos valores de `0` y `1` por el puerto serial pero con la particularidad de que tenemos que hacer una funcion que nos permita enviar los caracteres como `bytes`. La funcion debe ser parecida a la siguiente:
+
+```python
+def enviar_comando(comando):
+    arduino.write(comando.encode())
+```
+
+Luego de esto declareamos un bucle que nos permita enviar mensajes desde la terminal, y salir del programa. (Cambia 'COM3' por el puerto correcto en tu sistema (Linux suele ser /dev/ttyUSB0 o similar))
+
+```python
+import serial
+import time
+
+arduino = serial.Serial(port='COM3', baudrate=9600, timeout=1)
+time.sleep(2)  
+
+def enviar_comando(comando):
+    arduino.write(comando.encode())  
+    print(f"Enviado: {comando}")
+
+while True:
+    cmd = input("Escribe '1' para encender el LED, '0' para apagarlo, 'q' para salir: ")
+    if cmd == 'q':
+        break
+    if cmd in ['0', '1']:
+        enviar_comando(cmd)
+    else:
+        print("Comando inválido")
+
+arduino.close()
+```
+
+---
+
+### Codigo del proyecto
+
+```python
+import customtkinter as ctk
+import sqlite3
+from tkinter import messagebox
+from random import randint
+import socket
+import threading
+import time
+import sys
+import os
+import subprocess
+from datetime import datetime
+import random
+
+SERVER_HOST = 'localhost'
+SERVER_PORT = 12345
+
+conn_log = sqlite3.connect('logs.db')
+cursor_log = conn_log.cursor()
+cursor_log.execute('''
+    CREATE TABLE IF NOT EXISTS logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        lugar TEXT NOT NULL,
+        estado TEXT NOT NULL,
+        timestamp TEXT NOT NULL
+    )
+''')
+conn_log.commit()
+
+def guardar_log(lugar, estado):
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    cursor_log.execute('INSERT INTO logs (lugar, estado, timestamp) VALUES (?, ?, ?)',
+                   (lugar, estado, timestamp))
+    conn_log.commit()
+    print(f"alarma {lugar} {estado}")
+
+def send_command_to_server(command):
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
+            client_socket.connect((SERVER_HOST, SERVER_PORT))
+            client_socket.send(command.encode())
+            print(f"Mensaje enviado al servidor: {command}")
+    except Exception as e:
+        print(f"Error al enviar el comando: {e}")
+
+class PlanoAlarmas(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+
+        ctk.set_appearance_mode("dark")
+        ctk.set_default_color_theme("blue")
+
+        self.title("Sistema de Monitoreo Avanzado")
+        self.geometry("1200x700")
+
+        self.estados = {
+            "Observatorio": ctk.IntVar(value=0),
+            "Conferencias": ctk.IntVar(value=0),
+            "Parqueo": ctk.IntVar(value=0)
+        }
+
+        self.setup_ui()
+
+    def setup_ui(self):
+        self.grid_columnconfigure(0, weight=4)
+        self.grid_columnconfigure(1, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+
+        self.canvas = ctk.CTkCanvas(self, bg="#2b2b2b", highlightthickness=0)
+        self.canvas.grid(row=0, column=0, padx=20, pady=20, sticky="nsew")
+
+        control_frame = ctk.CTkFrame(self)
+        control_frame.grid(row=0, column=1, padx=(0, 20), pady=20, sticky="nsew")
+
+        ctk.CTkLabel(control_frame, text="Control de Alarmas", font=ctk.CTkFont(size=14, weight="bold")).pack(pady=15)
+
+        for area in self.estados:
+            frame = ctk.CTkFrame(control_frame)
+            frame.pack(fill="x", padx=10, pady=5)
+
+            ctk.CTkLabel(frame, text=f"{area}:").pack(side="left", padx=5)
+            ctk.CTkRadioButton(frame, text="Normal", variable=self.estados[area], value=0, command=self.actualizar_plano).pack(side="left")
+            ctk.CTkRadioButton(frame, text="Alarma", variable=self.estados[area], value=1, command=self.actualizar_plano).pack(side="left", padx=5)
+
+        ctk.CTkButton(control_frame, text="Simular Cambios", command=self.simular_cambios).pack(pady=10)
+        ctk.CTkButton(control_frame, text="Reiniciar Estados", command=self.reiniciar_estados).pack(pady=10)
+
+        self.actualizar_plano()
+
+    def actualizar_plano(self):
+        self.canvas.delete("all")
+        self.canvas.create_rectangle(50, 50, 750, 550, outline="#3a7ebf", width=3)
+
+        self.dibujar_area("Observatorio", 500, 80, 200, 150)
+        self.dibujar_area("Conferencias", 80, 200, 200, 150)
+        self.dibujar_area("Parqueo", 50, 450, 700, 80)
+
+        self.enviar_estado_arduino()
+
+    def dibujar_area(self, nombre, x, y, ancho, alto):
+        self.canvas.create_rectangle(
+            x, y, x+ancho, y+alto,
+            outline="#3a7ebf",
+            fill="#1f1f1f",
+            width=2
+        )
+
+        self.canvas.create_text(
+            x + ancho/2, y + alto/2,
+            text=nombre,
+            font=("Arial", 12, "bold"),
+            fill="#ffffff"
+        )
+
+        led_size = 25
+        color = "#ff5555" if self.estados[nombre].get() else "#55ff55"
+        self.canvas.create_oval(
+            x + ancho - led_size - 15, y + 15,
+            x + ancho - 15, y + led_size + 15,
+            fill=color,
+            outline="#ffffff",
+            width=2
+        )
+
+        estado = "ALARMA ACTIVADA!" if self.estados[nombre].get() else "Estado Normal"
+        self.canvas.create_text(
+            x + ancho - led_size/2 - 15, y + led_size + 30,
+            text=estado,
+            font=("Arial", 9, "bold"),
+            fill=color
+        )
+
+        mensaje = f"Luz {nombre} {'encendida' if self.estados[nombre].get() else 'apagada'}"
+        guardar_log(nombre, "encendida" if self.estados[nombre].get() else "apagada")
+
+    def enviar_estado_arduino(self):
+        estados_binarios = ''.join(str(self.estados[area].get()) for area in ["Observatorio", "Conferencias", "Parqueo"])
+        print(f"Estados binarios generados: {estados_binarios}")
+        send_command_to_server(estados_binarios)
+
+    def simular_cambios(self):
+        for area in self.estados:
+            self.estados[area].set(random.randint(0, 1))
+        self.actualizar_plano()
+
+    def reiniciar_estados(self):
+        for area in self.estados:
+            self.estados[area].set(0)
+        self.actualizar_plano()
+
+class AppRoot(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+        self.title("Control Panel")
+        self.geometry("1200x800")
+        self.protocol("WM_DELETE_WINDOW", self.on_close)
+        self.setup_ui()
+        self.mainloop()
+
+    def setup_ui(self):
+        self.grid_columnconfigure(1, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+
+        self.frame_menu = ctk.CTkFrame(self, width=200, corner_radius=0)
+        self.frame_menu.grid(row=0, column=0, sticky="nsew")
+        self.frame_menu.grid_rowconfigure(4, weight=1)
+
+        self.frame_content = ctk.CTkFrame(self, corner_radius=0)
+        self.frame_content.grid(row=0, column=1, sticky="nsew")
+        self.frame_content.grid_rowconfigure(0, weight=1)
+        self.frame_content.grid_columnconfigure(0, weight=1)
+
+        buttons = [
+            ("📊 Dashboard", self.show_dashboard),
+            ("🔒 Security", self.open_security),
+            ("📋 Report", self.show_report),
+            ("🚨 Trigger Alarm", self.trigger_alarm),
+            ("💻 Terminal", self.open_terminal),  
+        ]
+
+        for i, (text, command) in enumerate(buttons):
+            button = ctk.CTkButton(
+                self.frame_menu,
+                text=text,
+                command=command,
+                height=40,
+                anchor="w",
+                font=("Arial", 14),
+                corner_radius=0,
+            )
+            button.grid(row=i, column=0, sticky="ew", padx=5, pady=5)
+
+        self.show_dashboard()
+
+    def open_terminal(self):
+        """Abre una terminal en la interfaz."""
+        self.clear_content()
+        frame_terminal = ctk.CTkFrame(self.frame_content)
+        frame_terminal.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+
+        label_title = ctk.CTkLabel(
+            frame_terminal, text="Terminal", font=("Arial", 18, "bold")
+        )
+        label_title.pack(pady=10)
+
+        self.terminal_output = ctk.CTkTextbox(frame_terminal, height=400, width=800)
+        self.terminal_output.pack(padx=10, pady=10, fill="both", expand=True)
+
+        self.terminal_input = ctk.CTkEntry(frame_terminal, placeholder_text="Escribe un comando...")
+        self.terminal_input.pack(padx=10, pady=10, fill="x")
+        self.terminal_input.bind("<Return>", self.process_terminal_command)
+
+    def process_terminal_command(self, event):
+        """Procesa el comando ingresado en la terminal."""
+        command = self.terminal_input.get()
+        if command.strip():
+            
+            self.terminal_output.insert("end", f"> {command}\n")
+            self.terminal_output.see("end")  
+            self.terminal_input.delete(0, "end")
+
+            try:
+                send_command_to_server(command)
+                self.terminal_output.insert("end", f"Comando enviado: {command}\n")
+            except Exception as e:
+                self.terminal_output.insert("end", f"Error al enviar el comando: {e}\n")
+
+    def clear_content(self):
+        for widget in self.frame_content.winfo_children():
+            widget.destroy()
+
+```
+
+```python
+    def show_dashboard(self):
+        self.clear_content()
+        frame_dashboard = ctk.CTkFrame(self.frame_content)
+        frame_dashboard.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+        frame_dashboard.grid_columnconfigure(0, weight=1)
+        frame_dashboard.grid_rowconfigure(1, weight=1)
+
+        label_title = ctk.CTkLabel(
+            frame_dashboard, text="Dashboard", font=("Arial", 18, "bold")
+        )
+        label_title.grid(row=0, column=0, pady=10, sticky="n")
+
+        frame_widgets = ctk.CTkFrame(frame_dashboard)
+        frame_widgets.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
+        frame_widgets.grid_columnconfigure((0, 1, 2, 3), weight=1)
+
+        
+        widgets = [
+            ("👥 People Count", randint(0, 100)),
+            ("🚨 Alarm Status", "ON" if randint(0, 1) else "OFF"),
+            ("💡 Lights On", randint(0, 10)),
+        ]
+
+        for i, (title, value) in enumerate(widgets):
+            widget_frame = ctk.CTkFrame(frame_widgets)
+            widget_frame.grid(row=0, column=i, padx=10, pady=10, sticky="nsew")
+
+            label_title = ctk.CTkLabel(widget_frame, text=title, font=("Arial", 12))
+            label_title.pack(pady=(10, 0))
+
+            label_value = ctk.CTkLabel(
+                widget_frame, text=str(value), font=("Arial", 24, "bold")
+            )
+            label_value.pack(pady=(0, 10))
+
+        
+        servo_button_frame = ctk.CTkFrame(frame_widgets)
+        servo_button_frame.grid(row=0, column=3, padx=10, pady=10, sticky="nsew")
+
+        servo_button = ctk.CTkButton(
+            servo_button_frame,
+            text="Abrir Servo",
+            font=("Arial", 14, "bold"),
+            command=self.enviar_comando_servo,
+            fg_color="#3a7ebf",
+            hover_color="#1f6aa5",
+        )
+        servo_button.pack(expand=True, fill="both", padx=10, pady=10)
+
+    def obtener_humedad(self):
+        """Función para enviar el comando 'humedad' al servidor y mostrar el resultado."""
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
+                client_socket.connect((SERVER_HOST, SERVER_PORT))
+                client_socket.send("humedad".encode())  
+                self.humedad_resultado.configure(text="Esperando respuesta...")
+
+                
+                respuesta = client_socket.recv(1024).decode().strip()
+                if respuesta.startswith("Error"):
+                    
+                    self.humedad_resultado.configure(text="Error al obtener la humedad")
+                    messagebox.showerror("Error", respuesta)
+                else:
+                    
+                    self.humedad_resultado.configure(text=f"Humedad: {respuesta}%")
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo obtener la humedad: {e}")
+
+    def toggle_techo(self):
+        """Función para alternar el estado del techo."""
+        self.techo_status = not self.techo_status  
+        if self.techo_status:
+            # Techo encendido
+            self.techo_button.configure(
+                text="Techo ON",
+                fg_coloor="#ff5555",  # Rojo
+                hover_color="#cc0000",
+            )
+            send_command_to_server("techo on")
+            guardar_log("techo", "encendido")
+        else:
+            # Techo apagado
+            self.techo_button.configure(
+                text="Techo OFF",
+                fg_color="#55ff55",  # Verde
+                hover_color="#3cb043",
+            )
+            send_command_to_server("techo off")
+            guardar_log("techo", "apagado")
+
+    def enviar_comando_servo(self):
+        """Función para enviar el comando 'servo' al servidor."""
+        try:
+            send_command_to_server("servo")
+            messagebox.showinfo("Comando Enviado", "El comando 'servo' fue enviado al servidor.")
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo enviar el comando: {e}")
+
+    def open_security(self):
+        self.destroy()
+        app = PlanoAlarmas()
+        app.mainloop()
+
+    def show_report(self):
+        self.clear_content()
+        frame_report = ctk.CTkFrame(self.frame_content)
+        frame_report.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+
+        label_title = ctk.CTkLabel(
+            frame_report, text="Report History", font=("Arial", 18, "bold")
+        )
+        label_title.pack(pady=20)
+
+        
+        tab_view = ctk.CTkTabview(frame_report, width=800, height=500)
+        tab_view.pack(fill="both", expand=True, padx=20, pady=10)
+
+        
+        tab_alarm_logs = tab_view.add("Logs de Alarmas")
+        self.populate_logs_table(tab_alarm_logs, "logs.db", ["ID", "Lugar", "Estado", "Hora"], "SELECT id, lugar, estado, timestamp FROM logs ORDER BY id DESC")
+
+        
+        tab_general_logs = tab_view.add("Logs Generales")
+        self.populate_logs_table(tab_general_logs, "logs2.db", ["ID", "Fecha", "Mensaje"], "SELECT id, fecha, mensaje FROM logs ORDER BY id DESC")
+
+    def populate_logs_table(self, parent_frame, db_name, headers, query):
+       
+        frame_table = ctk.CTkScrollableFrame(parent_frame)
+        frame_table.pack(fill="both", expand=True, padx=10, pady=10)
+
+        
+        for i, header in enumerate(headers):
+            label = ctk.CTkLabel(
+                frame_table, text=header, font=("Arial", 12, "bold"), width=120
+            )
+            label.grid(row=0, column=i, padx=5, pady=5, sticky="w")
+
+        logs = self.get_logs_from_db(db_name, query)
+        for i, log in enumerate(logs, start=1):
+            for j, field in enumerate(log):
+                label = ctk.CTkLabel(
+                    frame_table, text=str(field), font=("Arial", 12), width=120
+                )
+                label.grid(row=i, column=j, padx=5, pady=5, sticky="w")
+
+    def get_logs_from_db(self, db_name, query):
+        try:
+            conn = sqlite3.connect(db_name)
+            cursor = conn.cursor()
+            cursor.execute(query)
+            logs = cursor.fetchall()
+            conn.close()
+            return logs
+        except Exception as e:
+            print(f"Error fetching logs from {db_name}: {e}")
+            return []
+
+    def trigger_alarm(self):
+        send_command_to_server("ALARMS ON")
+        guardar_log("observatorio", "encendido")
+
+    def on_close(self):
+        self.destroy()
+
+if __name__ == "__main__":
+    ctk.set_appearance_mode("dark")
+    ctk.set_default_color_theme("blue")
+    AppRoot()
+```
+
+### grafica.py
+
+```python
+import customtkinter as ctk
+import random
+import socket
+import time
+import os
+import sys
+import subprocess
+import sqlite3
+import socket
+import os
+import sys
+import tkinter.messagebox as messagebox  
+
+def send_command_to_server(command):
+    """Función para enviar comandos al servidor."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.connect(('localhost', 12345))  
+        s.sendall(command.encode())  
+        s.close()
+        print(f"Comando enviado al servidor: {command}")
+    except Exception as e:
+        print(f"Error al enviar el comando al servidor: {e}")
+
+class PlanoAlarmas(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+
+        ctk.set_appearance_mode("dark")
+        ctk.set_default_color_theme("blue")
+
+        self.title("Sistema de Monitoreo Avanzado")
+        self.geometry("1200x700")
+
+        self.arduino_socket_host = 'localhost'
+        self.arduino_socket_port = 12345  
+
+        self.estados = {
+            "Observatorio": ctk.IntVar(value=0),
+            "Conferencias": ctk.IntVar(value=0),
+            "Parqueo": ctk.IntVar(value=0)
+        }
+
+        self.setup_ui()
+        self.init_log_db()
+
+    def setup_ui(self):
+        self.grid_columnconfigure(0, weight=4)
+        self.grid_columnconfigure(1, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+
+        self.canvas = ctk.CTkCanvas(self, bg="#2b2b2b", highlightthickness=0)
+        self.canvas.grid(row=0, column=0, padx=20, pady=20, sticky="nsew")
+
+        control_frame = ctk.CTkFrame(self)
+        control_frame.grid(row=0, column=1, padx=(0, 20), pady=20, sticky="nsew")
+
+        ctk.CTkLabel(control_frame, text="Control de Alarmas", font=ctk.CTkFont(size=14, weight="bold")).pack(pady=15)
+
+        for area in self.estados:
+            frame = ctk.CTkFrame(control_frame)
+            frame.pack(fill="x", padx=10, pady=5)
+
+            ctk.CTkLabel(frame, text=f"{area}:").pack(side="left", padx=5)
+            ctk.CTkRadioButton(frame, text="Normal", variable=self.estados[area], value=0, command=self.actualizar_plano).pack(side="left")
+            ctk.CTkRadioButton(frame, text="Alarma", variable=self.estados[area], value=1, command=self.actualizar_plano).pack(side="left", padx=5)
+
+        ctk.CTkButton(control_frame, text="Simular Cambios", command=self.simular_cambios).pack(pady=10)
+        ctk.CTkButton(control_frame, text="Reiniciar Estados", command=self.reiniciar_estados).pack(pady=10)
+
+        
+        alarm_on_button = ctk.CTkButton(
+            control_frame,
+            text="Encender Alarma",
+            font=("Arial", 14, "bold"),
+            command=self.encender_alarma,
+            fg_color="#ff5555",  
+            hover_color="#cc0000",
+        )
+        alarm_on_button.pack(pady=10, padx=20, fill="x")
+
+        alarm_off_button = ctk.CTkButton(
+            control_frame,
+            text="Apagar Alarma",
+            font=("Arial", 14, "bold"),
+            command=self.apagar_alarma,
+            fg_color="#55ff55",  
+            hover_color="#3cb043",
+        )
+        alarm_off_button.pack(pady=10, padx=20, fill="x")
+
+        self.actualizar_plano()
+
+    def init_log_db(self):
+        conn = sqlite3.connect('logs.db')
+        c = conn.cursor()
+        c.execute('''CREATE TABLE IF NOT EXISTS logs (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        fecha TEXT,
+                        mensaje TEXT
+                    )''')
+        conn.commit()
+        conn.close()
+
+    def guardar_log(self, mensaje):
+        conn = sqlite3.connect('logs.db')
+        c = conn.cursor()
+        c.execute("INSERT INTO logs (fecha, mensaje) VALUES (datetime('now', 'localtime'), ?)", (mensaje,))
+        conn.commit()
+        conn.close()
+
+    def actualizar_plano(self):
+        self.canvas.delete("all")
+        self.canvas.create_rectangle(50, 50, 750, 550, outline="#3a7ebf", width=3)
+
+        self.dibujar_area("Observatorio", 500, 80, 200, 150)
+        self.dibujar_area("Conferencias", 80, 200, 200, 150)
+        self.dibujar_area("Parqueo", 50, 450, 700, 80)
+
+        self.enviar_estado_arduino()
+
+    def dibujar_area(self, nombre, x, y, ancho, alto):
+        self.canvas.create_rectangle(
+            x, y, x+ancho, y+alto,
+            outline="#3a7ebf",
+            fill="#1f1f1f",
+            width=2
+        )
+
+        self.canvas.create_text(
+            x + ancho/2, y + alto/2,
+            text=nombre,
+            font=("Arial", 12, "bold"),
+            fill="#ffffff"
+        )
+
+        led_size = 25
+        color = "#ff5555" if self.estados[nombre].get() else "#55ff55"
+        self.canvas.create_oval(
+            x + ancho - led_size - 15, y + 15,
+            x + ancho - 15, y + led_size + 15,
+            fill=color,
+            outline="#ffffff",
+            width=2
+        )
+
+        estado = "ALARMA ACTIVADA!" if self.estados[nombre].get() else "Estado Normal"
+        self.canvas.create_text(
+            x + ancho - led_size/2 - 15, y + led_size + 30,
+            text=estado,
+            font=("Arial", 9, "bold"),
+            fill=color
+        )
+
+        mensaje = f"Luz {nombre} {'encendida' if self.estados[nombre].get() else 'apagada'}"
+        self.guardar_log(mensaje)
+
+    def enviar_estado_arduino(self):
+        estados_binarios = ''.join(str(self.estados[area].get()) for area in ["Observatorio", "Conferencias", "Parqueo"])
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.connect((self.arduino_socket_host, self.arduino_socket_port))
+            s.sendall(estados_binarios.encode())
+            s.close()
+        except Exception as e:
+            print("No se pudo enviar al servidor del Arduino:", e)
+
+    def simular_cambios(self):
+        for area in self.estados:
+            self.estados[area].set(random.randint(0, 1))
+        self.actualizar_plano()
+
+    def reiniciar_estados(self):
+        for area in self.estados:
+            self.estados[area].set(0)
+        self.actualizar_plano()
+
+    def encender_alarma(self):
+        """Función para enviar el comando 'ALARMA ON' al servidor."""
+        try:
+            send_command_to_server("ALARMA ON")
+            self.guardar_log("Alarma encendida")
+            messagebox.showinfo("Alarma", "La alarma ha sido encendida.")
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo encender la alarma: {e}")
+
+    def apagar_alarma(self):
+        """Función para enviar el comando 'ALARMA OFF' al servidor."""
+        try:
+            send_command_to_server("ALARMA OFF")
+            self.guardar_log("Alarma apagada")
+            messagebox.showinfo("Alarma", "La alarma ha sido apagada.")
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo apagar la alarma: {e}")
+
+    def open_security(self):
+        self.destroy()
+        python_executable = sys.executable
+        grafico_script = os.path.join(os.path.dirname(__file__), "grafico.py")
+        subprocess.Popen([python_executable, grafico_script])
+        sys.exit()
+
+if __name__ == "__main__":
+    app = PlanoAlarmas()
+    app.mainloop()
+
+```
+
+### servidor.py
+
+Un problema que me ocurrio al programar en python para arduino era que no podia ocupar los puertos `COM` para mandar datos desde diferentes programas o terminales y peor era si queria tener una a escucha y otro para mandar como lo necesitaba el proyecto. Asi que con mis conocimietos en python/redes desarrolles un pequeño `servidor` que es el unico que tiene acceso de forma directa al `arduino`. Esto me permitio tener cuantos programas necesitara conectados al servidor y que el arduino me permita conectar todo simultaneamente y que todo me funcione ya que el arduino solo conoce el servidor (Si tiene una mayor carga o lo quieren eficientizar seria bueno un algoritmo que decida que enviar primero segun la importancia e impacto pero esto si me lo guando).
+
+```python
+import socket
+import serial
+import threading
+import sqlite3
+from datetime import datetime
+import time
+
+puerto = 'COM8'
+arduino = serial.Serial('COM8', 9600)
+print("Conectado al Arduino por el puerto", puerto)
+
+time.sleep(2)
+
+arduino.write("alarma off\n".encode())
+print("Comando inicial enviado: ALARMA OFF")
+
+server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+server.bind(('localhost', 12345))
+server.listen(5)
+
+print("Servidor puente activo, esperando comandos...")
+
+conn = sqlite3.connect('logs2.db', check_same_thread=False)
+cursor = conn.cursor()
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        fecha TEXT NOT NULL, 
+        mensaje TEXT NOT NULL
+    )
+''')
+conn.commit()
+
+def guardar_log(mensaje):
+    fecha = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    cursor.execute('INSERT INTO logs (fecha, mensaje) VALUES (?, ?)', (fecha, mensaje))
+    conn.commit()
+
+def leer_desde_arduino():
+    while True:
+        if arduino.in_waiting > 0:
+            data = arduino.readline().decode().strip()
+            mensaje = f"[Arduino] --> {data}"
+            print(mensaje)
+            guardar_log(mensaje)
+
+thread_arduino = threading.Thread(target=leer_desde_arduino, daemon=True)
+thread_arduino.start()
+
+while True:
+    client, addr = server.accept()
+    data = client.recv(1024).decode().strip()
+    if data:
+        mensaje = f"[{addr}] --> {data}"
+        print(mensaje)
+        guardar_log(mensaje)
+
+        if data == "humedad":
+            arduino.write("humedad\n".encode())
+            time.sleep(1)
+            if arduino.in_waiting > 0:
+                humedad = arduino.readline().decode().strip()
+                print(f"Humedad recibida del Arduino: {humedad}")
+                client.sendall(humedad.encode())
+            else:
+                client.sendall("Error: No se recibió respuesta del Arduino.".encode())
+        else:
+            arduino.write((data + '\n').encode())
+    client.close()
+
+```
+
+## Aplicacion movil
+
+Una idea que salio el mismo dia de la presentacion era poder incluir una `aplicacion movil` y como prototipo rapido, decidi crear uno que nos permita conectarnos desde la web en cualquier dispositivo movil con el cual se pueda interactuar con todo el museo. (tambien conectada al servidor)
+
+```python
+import streamlit as st
+import socket
+
+SERVER_HOST = 'localhost'
+SERVER_PORT = 12345
+
+def enviar_comando(comando):
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
+            client_socket.connect((SERVER_HOST, SERVER_PORT))
+            client_socket.send(comando.encode())
+            respuesta = client_socket.recv(1024).decode().strip()
+            return respuesta
+    except Exception as e:
+        return f"Error: {e}"
+
+st.title("Control de Arduino vía Servidor")
+st.sidebar.title("Comandos")
+
+if st.sidebar.button("Encender Alarma"):
+    respuesta = enviar_comando("alarma on")
+    st.sidebar.success(f"Respuesta: {respuesta}")
+
+if st.sidebar.button("Apagar Alarma"):
+    respuesta = enviar_comando("alarma off")
+    st.sidebar.success(f"Respuesta: {respuesta}")
+
+if st.sidebar.button("Abrir Servo"):
+    respuesta = enviar_comando("servo")
+    st.sidebar.success(f"Respuesta: {respuesta}")
+
+if st.sidebar.button("Cerrar Servo"):
+    respuesta = enviar_comando("servo")
+    st.sidebar.success(f"Respuesta: {respuesta}")
+
+if st.sidebar.button("Obtener Humedad"):
+    respuesta = enviar_comando("humedad")
+    st.sidebar.success(f"Humedad: {respuesta}")
+
+if st.sidebar.button("techo on"):
+    respuesta = enviar_comando("techo on")
+    st.sidebar.success(f"Respuesta: {respuesta}")
+
+if st.sidebar.button("techo off"):
+    respuesta = enviar_comando("techo off")
+    st.sidebar.success(f"Respuesta: {respuesta}")
+
+st.header("Logs")
+if st.button("Actualizar Logs"):
+    respuesta = enviar_comando("GET LOGS")
+    st.text_area("Logs del Arduino", respuesta, height=200)
+```

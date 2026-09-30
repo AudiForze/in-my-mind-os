@@ -1,0 +1,1 @@
+Aunque parezca que hoy vivimos en una era inalámbrica, los responsables de que tengas Internet en casa siguen siendo **más de 1.000 millones de metros de cable submarino** que diferentes empresas llevan instalando desde 1866 para transportar datos entre continentes.
