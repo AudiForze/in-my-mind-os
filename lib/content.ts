@@ -3,6 +3,7 @@ import path from "node:path";
 import matter from "gray-matter";
 
 const ROOT = path.join(process.cwd(), "content");
+const BASE_PATH = process.env.GITHUB_ACTIONS === "true" ? "/in-my-mind-os" : "";
 
 export type Doc = {
   project: string; projectLabel: string; slug: string[]; href: string;
@@ -106,7 +107,7 @@ export function resolveObsidianImages(body: string) {
     const cleanTarget = target.trim();
     const assetPath = cleanTarget.split("/").map(encodeURIComponent).join("/");
     const label = (alias ?? cleanTarget.split("/").pop() ?? cleanTarget).trim();
-    const href = `/img/${assetPath}`;
+    const href = `${BASE_PATH}/img/${assetPath}`;
     if (/\.(pdf|excalidraw|ipynb)$/i.test(cleanTarget)) return `[${label}](${href})`;
     return `![${label}](${href})`;
   });
