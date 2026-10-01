@@ -11,15 +11,11 @@ Es un estandar para los protocolos de red que describe cómo los dispositivos de
 - **Capa de red -->** Esta capa se encarga de la dirección lógica y el enrutamiento de los datos a través de la red. Aquí tenemos las IP de origen y destino. Además de decidir qué ruta seguir para hacer el envío de dichos paquetes.
   
 
-![[Pasted image 20230411212148.png]]
-
 Protocolos que funcionan en esta capa --> IP, ICMP, OSPF, BGP o RIP.
 
 - **Capa de transporte -->** Esta capa proporciona servicios de transporte de extremo a extremo para el intercambio de datos entre dispositivos finales. 
 
    Esta capa es la que garantiza el envío y recepción de los paquetes. Los protocolos UDP y TCP son los que se encuentran en esta capa.
-
-![[Pasted image 20230411212206.png]]
 
 Protocolos que funcionan en esta capa --> TCP, UDP, SCTP O DCCP.
 
