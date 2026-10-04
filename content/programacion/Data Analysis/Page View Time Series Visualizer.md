@@ -1,6 +1,3 @@
-# Page View Time Series Visualizer
-
-## Descripción general
 
 Este proyecto fue desarrollado como parte de la certificación de **Data Analysis with Python** de freeCodeCamp. Su objetivo es analizar el número de visitas diarias del foro de freeCodeCamp entre mayo de 2016 y diciembre de 2019, limpiar los datos y representarlos mediante tres visualizaciones estadísticas:
 
