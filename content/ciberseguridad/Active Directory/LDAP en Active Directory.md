@@ -1,10 +1,8 @@
-# LDAP en Active Directory
-
-**LDAP (Lightweight Directory Access Protocol)** es uno de los protocolos fundamentales utilizados por **Active Directory (AD)** para almacenar y consultar información sobre usuarios, grupos, computadoras, unidades organizativas y otros objetos del dominio.
+LDAP (Lightweight Directory Access Protocol) es uno de los protocolos fundamentales utilizados por Active Directory (AD) para almacenar y consultar información sobre usuarios, grupos, computadoras, unidades organizativas y otros objetos del dominio.
 
 Durante una auditoría de seguridad, LDAP puede proporcionar una gran cantidad de información sobre la estructura de un dominio. Una configuración incorrecta puede permitir que usuarios no privilegiados o incluso sesiones anónimas obtengan información que debería estar restringida.
 
-En este artículo veremos cómo funciona LDAP dentro de Active Directory y cómo podemos **enumerarlo y analizarlo en un laboratorio controlado**.
+En este artículo veremos cómo funciona LDAP dentro de Active Directory y cómo podemos enumerarlo y analizarlo en un laboratorio controlado.
 
 > **Aviso:** Los ejemplos deben ejecutarse únicamente contra laboratorios, máquinas propias o sistemas para los que tengas autorización.
 
@@ -74,7 +72,7 @@ En un entorno Windows, normalmente tenemos:
     Directorio AD        Autenticación
 ```
 
-LDAP se utiliza principalmente para **consultar y modificar objetos del directorio**, mientras que Kerberos se utiliza principalmente para la autenticación dentro del dominio.
+LDAP se utiliza principalmente para consultar y modificar objetos del directorio, mientras que Kerberos se utiliza principalmente para la autenticación dentro del dominio.
 
 No debemos confundir ambos protocolos.
 

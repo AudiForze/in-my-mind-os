@@ -1,6 +1,6 @@
 # SMBClient — Guía completa
 
-`smbclient` es una herramienta de línea de comandos perteneciente al conjunto de herramientas **Samba**, utilizada para interactuar con servidores que implementan el protocolo **SMB (Server Message Block)**.
+`smbclient` es una herramienta de línea de comandos perteneciente al conjunto de herramientas Samba, utilizada para interactuar con servidores que implementan el protocolo SMB (Server Message Block).
 
 Permite conectarse a recursos compartidos de sistemas Windows, Linux, Unix y otros dispositivos compatibles con SMB. Desde una sesión interactiva es posible listar archivos, navegar por directorios, descargar y subir archivos, crear directorios, eliminar archivos y realizar diferentes operaciones sobre los recursos compartidos.
 
@@ -21,7 +21,7 @@ En administración de sistemas y ciberseguridad, `smbclient` resulta especialmen
 
 # 1. ¿Qué es SMB?
 
-**SMB (Server Message Block)** es un protocolo utilizado para compartir recursos a través de una red.
+SMB (Server Message Block) es un protocolo utilizado para compartir recursos a través de una red.
 
 Entre los recursos que puede proporcionar un servidor SMB se encuentran:
 
