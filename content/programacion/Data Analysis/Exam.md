@@ -1,6 +1,3 @@
-# Exam: análisis de datos con Python
-
-## Descripción general
 
 La carpeta `Exam` reúne varios ejercicios desarrollados durante la certificación **Data Analysis with Python** de freeCodeCamp. A diferencia de un proyecto aislado, aquí se concentran soluciones de distintos tipos de problemas estadísticos:
 

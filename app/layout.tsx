@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, Source_Serif_4 } from "next/font/google";
 import "@excalidraw/excalidraw/index.css";
+import "katex/dist/katex.min.css";
 import "./globals.css";
 
 // Sustitutos de Sohne / Signifier indicados en DESIGN.md

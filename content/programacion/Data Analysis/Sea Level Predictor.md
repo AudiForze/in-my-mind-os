@@ -1,6 +1,3 @@
-# Sea Level Predictor
-
-## Descripción general
 
 **Sea Level Predictor** es un proyecto de análisis y regresión lineal desarrollado como parte de la certificación **Data Analysis with Python** de freeCodeCamp. El objetivo es estudiar la evolución histórica del nivel del mar y construir dos líneas de tendencia:
 

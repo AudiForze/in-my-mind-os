@@ -2,8 +2,10 @@ import React, { cloneElement, isValidElement, type ReactElement, type ReactNode 
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
 import rehypeSlug from "rehype-slug";
 import rehypeHighlight from "rehype-highlight";
+import rehypeKatex from "rehype-katex";
 import ExcalidrawViewer from "@/components/ExcalidrawViewer";
 import NotebookViewer from "@/components/NotebookViewer";
 
@@ -99,8 +101,8 @@ export default function Markdown({ source }: { source: string }) {
   return (
     <div className="md">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeSlug, [rehypeHighlight, { detect: true, ignoreMissing: true }]]}
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[rehypeSlug, rehypeKatex, [rehypeHighlight, { detect: true, ignoreMissing: true }]]}
         components={{
           p: Paragraph as never,
           blockquote: Quote as never,
